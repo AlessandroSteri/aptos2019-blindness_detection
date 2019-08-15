@@ -83,26 +83,27 @@ def load_dataset_from_npz():
     return x_train, x_val, x_test, y_train, y_val
 
 def save_dataset_npz(x_train, x_val, x_test, y_train, y_val):
-    np.savez(os.path.join(dataset_dir, 'x_train.npz'), x_train)
-    np.savez(os.path.join(dataset_dir, 'x_val.npz'), x_val)
-    np.savez(os.path.join(dataset_dir, 'x_test.npz'), x_test)
-    np.savez(os.path.join(dataset_dir, 'y_train.npz'), y_train)
-    np.savez(os.path.join(dataset_dir, 'y_val.npz'), y_val)
+    np.savez_compressed(os.path.join(dataset_dir, 'x_train.npz'), x_train)
+    np.savez_compressed(os.path.join(dataset_dir, 'x_val.npz'), x_val)
+    np.savez_compressed(os.path.join(dataset_dir, 'x_test.npz'), x_test)
+    np.savez_compressed(os.path.join(dataset_dir, 'y_train.npz'), y_train)
+    np.savez_compressed(os.path.join(dataset_dir, 'y_val.npz'), y_val)
 
+print("[Info] Loading Dataset...")
 # IF FIRST TIME, RUN THESE LINES:
 x_train, x_val, x_test, y_train, y_val = load_dataset_from_images()
 save_dataset_npz(x_train, x_val, x_test, y_train, y_val)
 
 # IF ALREADY SAVED NPZ, RUN THIS LINE
 # x_train, x_val, x_test, y_train, y_val = load_dataset_from_npz()
-
+print("[Info] Dataset loaded.")
 #########################
 #  APTOS Dataset - END  #
 #########################
 
-# Add a channels dimension
-x_train = x_train[..., tf.newaxis]
-x_val= x_val[..., tf.newaxis]
+# Add a channels dimension  - NOT NEEDED BECAUSE WE ALREADY HAVE THE CHANNEL AS THIRD COMPONENT
+# x_train = x_train[..., tf.newaxis]
+# x_val= x_val[..., tf.newaxis]
 
 # Model Parameters
 BATCH_SIZE=32

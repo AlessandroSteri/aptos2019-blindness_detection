@@ -105,3 +105,4 @@ venv.bak/
 
 #DATASET
 data/*
+try_small.py

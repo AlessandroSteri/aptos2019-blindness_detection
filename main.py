@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import tensorflow as tf
-# import ipdb
+import ipdb
 
-from tensorflow.keras.layers import Dense, Flatten, Conv2D
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras import Model
 
 # mnist = tf.keras.datasets.mnist
@@ -20,7 +20,10 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-
+from tensorflow.keras.applications.vgg16 import VGG16
+model = VGG16()
+print(model.summary())
+# input("Press any button to continue...")
 dataset_dir = 'data'
 
 def load_dataset_from_images():
@@ -91,11 +94,11 @@ def save_dataset_npz(x_train, x_val, x_test, y_train, y_val):
 
 print("[Info] Loading Dataset...")
 # IF FIRST TIME, RUN THESE LINES:
-x_train, x_val, x_test, y_train, y_val = load_dataset_from_images()
-save_dataset_npz(x_train, x_val, x_test, y_train, y_val)
+# x_train, x_val, x_test, y_train, y_val = load_dataset_from_images()
+# save_dataset_npz(x_train, x_val, x_test, y_train, y_val)
 
 # IF ALREADY SAVED NPZ, RUN THIS LINE
-# x_train, x_val, x_test, y_train, y_val = load_dataset_from_npz()
+x_train, x_val, x_test, y_train, y_val = load_dataset_from_npz()
 print("[Info] Dataset loaded.")
 #########################
 #  APTOS Dataset - END  #
@@ -106,28 +109,48 @@ print("[Info] Dataset loaded.")
 # x_val= x_val[..., tf.newaxis]
 
 # Model Parameters
-BATCH_SIZE=32
-EPOCHS = 5
+BATCH_SIZE=16
+EPOCHS = 1
+print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
 
-train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(10000).batch(BATCH_SIZE)
+train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(100000).batch(BATCH_SIZE)
 val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(BATCH_SIZE)
 
 class MyModel(Model):
   def __init__(self):
     super(MyModel, self).__init__()
-    self.conv1 = Conv2D(32, 3, activation='relu')
+    self.vgg = VGG16()
+
+
+            # # Freeze the layers
+            # for layer in model.layers:
+            #         layer.trainable = False
+
+    # Add 'softmax' instead of earlier 'prediction' layer.
+    # model.add(Dense(2, activation='softmax'))
+
+    self.conv1 = Conv2D(64, 3, activation='relu')
+    self.pool1 = MaxPooling2D(pool_size=(2, 2), strides=None, padding='valid', data_format=None)
+    self.conv2 = Conv2D(32, 3, activation='relu')
     self.flatten = Flatten()
     self.d1 = Dense(128, activation='relu')
-    self.d2 = Dense(10, activation='softmax')
+    self.d2 = Dense(6, activation='softmax')
 
   def call(self, x):
+    x = tf.cast(x, 'float32')
+    for layer in self.vgg.layers[:-5]:
+        layer.trainable = False
+        x = layer(x)
     x = self.conv1(x)
+    x = self.pool1(x)
+    x = self.conv2(x)
     x = self.flatten(x)
     x = self.d1(x)
     return self.d2(x)
 
 # Create an instance of the model
 # ipdb.set_trace()
+print("[Info] Creating the model")
 model = MyModel()
 
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
@@ -156,12 +179,17 @@ def test_step(images, labels):
     test_loss(t_loss)
     test_accuracy(labels, predictions)
 
+@tf.function
+def pred_step(images):
+    return model(images)
+
 for epoch in range(EPOCHS):
+  print("[Info] Starting epoch {}".format(epoch))
   for images, labels in train_ds:
     train_step(images, labels)
-
-  for test_images, test_labels in test_ds:
+  for test_images, test_labels in val_ds:
     test_step(test_images, test_labels)
+
 
   template = 'Epoch {}, Loss: {}, Accuracy: {}, Test Loss: {}, Test Accuracy: {}'
   print(template.format(epoch+1,
@@ -175,3 +203,26 @@ for epoch in range(EPOCHS):
   train_accuracy.reset_states()
   test_loss.reset_states()
   test_accuracy.reset_states()
+
+
+# Make predictions
+print("[Info] Making predictions...")
+print("Test set shape " + str(x_test.shape))
+# ipdb.set_trace()
+test_dir    = os.path.join(dataset_dir, 'test_images')
+test_df  = pd.read_csv(os.path.join(dataset_dir, 'test.csv'))
+test_ds = tf.data.Dataset.from_tensor_slices(x_test).batch(BATCH_SIZE)
+
+predictions = []
+for images in test_ds:
+    predictions = tf.concat([predictions, tf.math.argmax(pred_step(images), -1)], -1)
+
+# ipdb.set_trace()
+# with tf.device("/cpu:0"):
+#     x_test = tf.cast(x_test, 'float32')
+# print("Test_ds shape " + str(test_ds.shape))
+# predictions = tf.math.argmax(model(test_ds))
+print("Len pred: {}".format(len(predictions)))
+test_df['prediction']=predictions
+test_df.to_csv(os.path.join("out", "prediction.csv"), index=False)
+

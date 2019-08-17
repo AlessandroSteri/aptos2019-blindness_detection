@@ -1,9 +1,15 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+
+# uncomment to force cpu exeution
+# import os
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 import tensorflow as tf
 import ipdb
 
-from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Dropout
 from tensorflow.keras import Model
 
 # mnist = tf.keras.datasets.mnist
@@ -14,6 +20,7 @@ from tensorflow.keras import Model
 # APTOS Dataset - BEGIN #
 #########################
 import pandas as pd
+from datetime import datetime
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,6 +32,8 @@ model = VGG16()
 print(model.summary())
 # input("Press any button to continue...")
 dataset_dir = 'data'
+output_dir = 'out'
+models_dir = 'models'
 
 def load_dataset_from_images():
     # Path variables
@@ -109,8 +118,8 @@ print("[Info] Dataset loaded.")
 # x_val= x_val[..., tf.newaxis]
 
 # Model Parameters
-BATCH_SIZE=16
-EPOCHS = 1
+BATCH_SIZE=32
+EPOCHS = 10000
 print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
 
 train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(100000).batch(BATCH_SIZE)
@@ -120,32 +129,36 @@ class MyModel(Model):
   def __init__(self):
     super(MyModel, self).__init__()
     self.vgg = VGG16()
-
-
-            # # Freeze the layers
-            # for layer in model.layers:
-            #         layer.trainable = False
-
-    # Add 'softmax' instead of earlier 'prediction' layer.
-    # model.add(Dense(2, activation='softmax'))
-
     self.conv1 = Conv2D(64, 3, activation='relu')
     self.pool1 = MaxPooling2D(pool_size=(2, 2), strides=None, padding='valid', data_format=None)
     self.conv2 = Conv2D(32, 3, activation='relu')
     self.flatten = Flatten()
     self.d1 = Dense(128, activation='relu')
+    self.d1_2 = Dense(56, activation='sigmoid')
+    # self.d1_4 = Dense(28, activation='relu')
+    # self.d1_8 = Dense(14, activation='relu')
     self.d2 = Dense(6, activation='softmax')
+    self.dropout1 = Dropout(0.5)
+    self.dropout2 = Dropout(0.5)
+    # self.dropout3 = Dropout(0.4)
+    # self.dropout4 = Dropout(0.3)
 
-  def call(self, x):
+  def call(self, x, is_training=True):
     x = tf.cast(x, 'float32')
     for layer in self.vgg.layers[:-5]:
         layer.trainable = False
         x = layer(x)
     x = self.conv1(x)
+    x = self.dropout1(x, training=is_training)
     x = self.pool1(x)
+    x = self.dropout2(x, training=is_training)
     x = self.conv2(x)
+    # x = self.dropout3(x, training=is_training)
     x = self.flatten(x)
-    x = self.d1(x)
+    # x = self.dropout4(x, training=is_training)
+    x = tf.concat([self.d1(x), x], -1)
+    x = self.d1_2(x)
+    # x = self.d1_4(x)
     return self.d2(x)
 
 # Create an instance of the model
@@ -174,29 +187,64 @@ def train_step(images, labels):
 
 @tf.function
 def test_step(images, labels):
-    predictions = model(images)
+    predictions = model(images, is_training=False)
     t_loss = loss_object(labels, predictions)
     test_loss(t_loss)
     test_accuracy(labels, predictions)
 
 @tf.function
 def pred_step(images):
-    return model(images)
+    return model(images, is_training=False)
+
+def predict():
+    # Make predictions
+    print("[Info] Making predictions...")
+    # print("Test set shape " + str(x_test.shape))
+    # ipdb.set_trace()
+    test_dir    = os.path.join(dataset_dir, 'test_images')
+    test_df  = pd.read_csv(os.path.join(dataset_dir, 'test.csv'))
+    test_ds = tf.data.Dataset.from_tensor_slices(x_test).batch(BATCH_SIZE)
+
+    predictions = []
+    for images in test_ds:
+        predictions = tf.concat([predictions, tf.math.argmax(pred_step(images), -1)], -1)
+    return predictions
+
+def save_predictions_csv(predictions):
+    dateTimeObj = datetime.now()
+    timestampStr = dateTimeObj.strftime("%d-%b-%Y_%H:%M:%S")
+    out_file = "{}_predictions.csv".format(timestampStr)
+    test_dir = os.path.join(dataset_dir, 'test_images')
+    test_df  = pd.read_csv(os.path.join(dataset_dir, 'test.csv'))
+    test_df['diagnosis']=predictions
+    test_df.to_csv(os.path.join(output_dir, "prediction.csv"), index=False)
+
+best_accuracy = 0.7945
 
 for epoch in range(EPOCHS):
-  print("[Info] Starting epoch {}".format(epoch))
+  print("[Info] Starting Epoch --> {}".format(epoch + 1))
   for images, labels in train_ds:
     train_step(images, labels)
   for test_images, test_labels in val_ds:
     test_step(test_images, test_labels)
 
-
-  template = 'Epoch {}, Loss: {}, Accuracy: {}, Test Loss: {}, Test Accuracy: {}'
-  print(template.format(epoch+1,
-                        train_loss.result(),
+  template = '\tLoss: {}, Accuracy: {}\n\tTest Loss: {}, Test Accuracy: {}\nBest Accuracy: {}'
+  print(template.format(train_loss.result(),
                         train_accuracy.result()*100,
                         test_loss.result(),
+                        best_accuracy*100,
                         test_accuracy.result()*100))
+
+  if test_accuracy.result() > best_accuracy:
+    best_accuracy = test_accuracy.result()
+    predictions = predict()
+    save_predictions_csv(predictions)
+
+    dateTimeObj = datetime.now()
+    timestampStr = dateTimeObj.strftime("%d-%b-%Y_%H:%M:%S")
+    model_name = '{}_model_{}_{}'.format(timestampStr, int(best_accuracy*10000), epoch)
+    model.save_weights(os.path.join(models_dir, model_name, 'model_weights'), save_format='tf')
+    print('Predicted with accuracy {} on Validation Set'.format(best_accuracy))
 
   # Reset the metrics for the next epoch
   train_loss.reset_states()
@@ -204,25 +252,4 @@ for epoch in range(EPOCHS):
   test_loss.reset_states()
   test_accuracy.reset_states()
 
-
-# Make predictions
-print("[Info] Making predictions...")
-print("Test set shape " + str(x_test.shape))
-# ipdb.set_trace()
-test_dir    = os.path.join(dataset_dir, 'test_images')
-test_df  = pd.read_csv(os.path.join(dataset_dir, 'test.csv'))
-test_ds = tf.data.Dataset.from_tensor_slices(x_test).batch(BATCH_SIZE)
-
-predictions = []
-for images in test_ds:
-    predictions = tf.concat([predictions, tf.math.argmax(pred_step(images), -1)], -1)
-
-# ipdb.set_trace()
-# with tf.device("/cpu:0"):
-#     x_test = tf.cast(x_test, 'float32')
-# print("Test_ds shape " + str(test_ds.shape))
-# predictions = tf.math.argmax(model(test_ds))
-print("Len pred: {}".format(len(predictions)))
-test_df['prediction']=predictions
-test_df.to_csv(os.path.join("out", "prediction.csv"), index=False)
 

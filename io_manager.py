@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import preprocessing as pre
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import preprocessing as pre
 
 def load_dataset_from_images(dataset_dir):
     # Path variables
@@ -54,6 +55,49 @@ def load_dataset_from_images(dataset_dir):
     x_train, x_val, y_train, y_val= train_test_split(x_train, y_train, test_size=TRAIN_VAL_SPLIT)
     x_train, x_val, x_test = x_train / 255.0, x_val/ 255.0, x_test / 255.0
     return x_train, x_val, x_test, y_train, y_val
+
+def get_ImageGenerator():
+    gen = ImageDataGenerator(width_shift_range=0.2,    #percentage [-0.2,+0.2] of image size
+                             height_shift_range=0.2,
+                             horizontal_flip=True,
+                             vertical_flip=True)
+    return gen
+
+def data_augmentation(X, y=None, labels=[], instances=[100]):
+    # 2 mode: no label -> labels=[] and instances=[N], return sample N instances from X
+    #         by label -> labels=[a,b,c] and instances=[Na,Nb,Nc], return sample of each label
+    num_labels = len(labels)
+    num_instances = len(instances)
+    if num_labels==0 and num_instances!=1:
+        raise Exception("[Error] Data Augmentation - Invalid number labels {}, number instances {}".format(num_labels, num_instances))
+    if num_labels>0 and num_labels!=num_instances:
+        raise Exception("[Error] Data Augmentation - Invalid number labels {} != number instances {}".format(num_labels, num_instances))
+    if num_labels==0:
+        return data_augmentation_all(X, y, instances[0])
+    else:
+        return data_augmentation_by_label(X, y, labels, instances)
+
+def data_augmentation_all(X, y=None, instances=100):
+    # mode 1: sample from all `X` a given number of elements (`instances`)
+    # if y==None, return augY=None
+    it = get_ImageGenerator().flow(X, y, batch_size=1)
+    augX = np.empty((instances, X.shape[1], X.shape[2], X.shape[3]), dtype=np.uint8)
+    if y is None:
+        augY = None
+    else:
+        augY = np.empty((instances), dtype=np.uint8)
+    for i in range(instances):
+        if y is None:
+            image = it.next()[0].astype('uint8')
+        else:
+            image, label = it.next()
+            image = image.astype('uint8')
+            augY[i] = label
+        augX[i, :, :, :] = image
+    return augX, augY
+
+def data_augmentation_by_label(X, y=None, labels=[0], instances=[100]):
+    pass
 
 def load_dataset_from_npz(dataset_dir):
     x_train_filepath = os.path.join(dataset_dir, 'x_train.npz')

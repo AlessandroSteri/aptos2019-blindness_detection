@@ -2,14 +2,17 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from datetime import datetime
 import preprocessing as pre
 from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
 def load_dataset_from_images(dataset_dir):
     # Path variables
     train_dir   = os.path.join(dataset_dir, 'train_images')
     test_dir    = os.path.join(dataset_dir, 'test_images')
     IMG_SIZE = 224      #224x244 is the size of ImageNet
+    TRAIN_VAL_SPLIT = 0.30
 
     # Function to open image and resize it
     def load_image_resized(image_path, desired_size=IMG_SIZE):
@@ -48,7 +51,7 @@ def load_dataset_from_images(dataset_dir):
     print("Size Test Set: " + str(x_test.shape))
 
     # Split dataset in Train and Validation set
-    x_train, x_val, y_train, y_val= train_test_split(x_train, y_train, test_size=0.15)
+    x_train, x_val, y_train, y_val= train_test_split(x_train, y_train, test_size=TRAIN_VAL_SPLIT)
     x_train, x_val, x_test = x_train / 255.0, x_val/ 255.0, x_test / 255.0
     return x_train, x_val, x_test, y_train, y_val
 

@@ -59,6 +59,22 @@ print("[Info] Loading Dataset...")
 x_train, x_val, x_test, y_train, y_val = io_manager.load_dataset_from_npz('preprocessed')
 print("[Info] Dataset loaded.")
 
+#DATA AUGMENTATION
+classes = [0,1,2,3,4]
+print("[Info] Training set data augmentation. Tot: {} images".format(len(y_train)))
+for c in classes:
+    print("    Class {}: {}".format(c, len(y_train[y_train==c])))
+num_instances = [149, 146, 139, 159, 94]
+#in this way tot is [1400, 400, 850, 300, 300]
+augX, augY = io_manager.data_augmentation(  x_train, y_train,
+                                            labels=classes,
+                                            instances=num_instances)
+x_train = np.concatenate((x_train, augX))
+y_train = np.concatenate((y_train, augY))
+print("[Info] Training set data augmentation. Tot: {} images".format(len(y_train)))
+for c in classes:
+    print("    Class {}: {}".format(c, len(y_train[y_train==c])))
+
 # BUILDING MODEL
 print("[Info] Creating the model")
 #model = VGG16()
@@ -210,7 +226,7 @@ while(epoch<EPOCHS):
 
         # Log the confusion matrix as an image summary.
         with file_writer.as_default():
-            tf.summary.image("Confusion Matrix", image, step=(epoch*N_SPLITS)+ i_fold)
+            tf.summary.image("Confusion Matrix", image, step=(epoch*NSPLITS)+ i_fold)
 
         # Always update best accuracy
         if test_accuracy.result() > best_accuracy:

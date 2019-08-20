@@ -57,10 +57,13 @@ def load_dataset_from_images(dataset_dir):
     return x_train, x_val, x_test, y_train, y_val
 
 def get_ImageGenerator():
-    gen = ImageDataGenerator(width_shift_range=0.2,    #percentage [-0.2,+0.2] of image size
-                             height_shift_range=0.2,
+    gen = ImageDataGenerator(width_shift_range=0.05,    #percentage [-0.2,+0.2] of image size
+                             height_shift_range=0.05,
                              horizontal_flip=True,
-                             vertical_flip=True)
+                             vertical_flip=True,
+                             fill_mode='constant', cval=0,
+                             rotation_range=90,
+                             brightness_range=[-0.20, +0.20])
     return gen
 
 def data_augmentation(X, y=None, labels=[], instances=[100]):
@@ -70,7 +73,7 @@ def data_augmentation(X, y=None, labels=[], instances=[100]):
     num_instances = len(instances)
     if num_labels==0 and num_instances!=1:
         raise Exception("[Error] Data Augmentation - Invalid number labels {}, number instances {}".format(num_labels, num_instances))
-    if num_labels>0 and num_labels!=num_instances:
+    if num_labels>0 and (num_labels!=num_instances or y is None):
         raise Exception("[Error] Data Augmentation - Invalid number labels {} != number instances {}".format(num_labels, num_instances))
     if num_labels==0:
         return data_augmentation_all(X, y, instances[0])
@@ -96,8 +99,20 @@ def data_augmentation_all(X, y=None, instances=100):
         augX[i, :, :, :] = image
     return augX, augY
 
-def data_augmentation_by_label(X, y=None, labels=[0], instances=[100]):
-    pass
+def data_augmentation_by_label(X, y, labels=[0], instances=[100]):
+    num_labels=len(labels)
+    num_instances=len(instances)
+    if num_labels>0 and num_labels!=num_instances:
+        raise Exception("[Error] Data Augmentation - Invalid number labels {} != number instances {}".format(num_labels, num_instances))
+    # Pre allocate structure
+    augX = np.empty((sum(instances), X.shape[1], X.shape[2], X.shape[3]), dtype=np.uint8)
+    augY = np.empty((sum(instances)), dtype=np.uint8)
+    begin = 0
+    for label, num in zip(labels, instances):
+        mask = y==label
+        augX[begin:begin+num, :, :, :], augY[begin:begin+num] = data_augmentation_all(X[mask], y[mask], num)
+        begin = begin + num
+    return augX, augY
 
 def load_dataset_from_npz(dataset_dir):
     x_train_filepath = os.path.join(dataset_dir, 'x_train.npz')

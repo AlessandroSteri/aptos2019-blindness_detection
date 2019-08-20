@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import ipdb
-
+import argparse
 import io
 import pandas as pd
 import seaborn as sns
@@ -15,49 +15,55 @@ import tensorflow as tf
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Dropout
 from tensorflow.keras import Model
 from tensorflow.keras.applications.vgg16 import VGG16
-from sklearn.model_selection import LeaveOneOut,KFold
+from sklearn.model_selection import LeaveOneOut, KFold, train_test_split
 import io_manager
 from MyModel import MyModel
 from Baseline import Baseline, MultiLayerPerceptron
-# from tb import plot_confusion_matrix
 
-# import tensorflow.keras.backend as K
-# import metrics
-# def _cohen_kappa(y_true, y_pred, num_classes, weights=None, metrics_collections=None, updates_collections=None, name=None):
-#     kappa, update_op = metrics.cohen_kappa(y_true, y_pred, num_classes, weights, metrics_collections, updates_collections, name)
-#     K.get_session().run(tf.local_variables_initializer())
-#     with tf.control_dependencies([update_op]):
-#         kappa = tf.identity(kappa)
-#     return kappa
-# def cohen_kappa_loss(num_classes, weights=None, metrics_collections=None, updates_collections=None, name=None):
-#     def cohen_kappa(y_true, y_pred):
-#         return -_cohen_kappa(y_true, y_pred, num_classes, weights, metrics_collections, updates_collections, name)
-#     return cohen_kappa
-# # get the loss function and set parameters
-# model_cohen_kappa = cohen_kappa_loss(num_classes=6) #,weights=weights)
+from utils import id_gen, mkdir
 
+cmdLineParser = argparse.ArgumentParser()
+cmdLineParser.add_argument("log_info", type=str, help="Info to log.")
+cmdLineArgs = cmdLineParser.parse_args()
+log_info = cmdLineArgs.log_info
+
+
+# Uncomment to force CPU run
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+# DEVELOPMENT ENV: set seed to have reproducible result
+from tensorflow.random import set_seed
+set_seed(3)
 
 # PARAMETERS
+# log_info = 'novgg'
 dataset_dir = 'data'
 output_dir = 'out'
 models_dir = 'models'
 tensorboard_dir = 'tensorboard'
+mkdir(tensorboard_dir)
 BATCH_SIZE = 32
 EPOCHS  = 30        # Number of epochs for training
 NSPLITS = 10        # KFold cross validations
 THRESHOLD = 75.0    # Save only models with accuracy above the threshold
-TRAIN_TEST_SPLIT = 30.0    # Percentage split of train/test set
+TRAIN_TEST_SPLIT = 0.3    # Percentage split of train/test set
+
+ID = id_gen()
+
+tb_base_dir = os.path.join(tensorboard_dir, ID + '_' + log_info)
+mkdir(tb_base_dir)
 
 print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
 
 # LOADING DATASET
 print("[Info] Loading Dataset...")
 # IF FIRST TIME, RUN THESE LINES:
-x_train, y_train = io_manager.load_dataset_from_images(dataset_dir)
-io_manager.save_dataset_npz(x_train, y_train, 'preprocessed')
+# x_train, y_train = io_manager.load_dataset_from_images(dataset_dir)
+# io_manager.save_dataset_npz(x_train, y_train, 'preprocessed')
 
 # IF ALREADY SAVED NPZ, RUN THIS LINE
-# x_train, y_train = io_manager.load_dataset_from_npz('preprocessed')
+x_train, y_train = io_manager.load_dataset_from_npz('preprocessed')
 print("[Info] Dataset loaded.")
 
 # SPLIT TRAIN/TEST DATA
@@ -89,8 +95,9 @@ model = MyModel()
 # model = MultiLayerPerceptron()
 
 # TensorBoard summary
-summary_writer = tf.summary.create_file_writer('./tensorboard')
-file_writer = tf.summary.create_file_writer('./tensorboard' + '/cm')
+summary_writer = tf.summary.create_file_writer(tb_base_dir)
+# cm_dir = os.path.join(tb_base_dir, 'cm')
+file_writer = tf.summary.create_file_writer(tb_base_dir)
 
 
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy() #model_cohen_kappa
@@ -104,15 +111,6 @@ val_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='val_accuracy')
 
 test_loss = tf.keras.metrics.Mean(name='test_loss')
 test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
-
-# def confusion_matrix_summary(correct, predict, classes, current_step):
-#     # confusion matrix summaries
-#     cm_summary_dir = os.path.join(tensorboard_dir, "img")
-#     cm_summary_writer = tf.summary.create_file_writer(cm_summary_dir) #, sess.graph)
-#     cm_summary = plot_confusion_matrix(correct, predict, classes, tensor_name='test/cm')
-
-    # with cm_summary_writer.as_default():
-        # tf.summary.image(cm_summary, current_step)
 
 @tf.function
 def train_step(images, labels):
@@ -168,7 +166,7 @@ best_accuracy = 0.0
 # TO DO: USE THIS VAL_DS AS TEST SET
 # train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(100000).batch(BATCH_SIZE)
 # val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(BATCH_SIZE)
-test_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(BATCH_SIZE)
+test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(BATCH_SIZE)
 k_fold = KFold(n_splits=NSPLITS, shuffle=True)
 
 # for epoch in range(EPOCHS):
@@ -191,7 +189,7 @@ while(epoch<EPOCHS):
         val_ds = tf.data.Dataset.from_tensor_slices((k_fold_x_val, k_fold_y_val)).batch(BATCH_SIZE)
 
         # Train, Validation and Test steps
-        print("[Info] Starting Epoch {}/{} --> Fold {}/{}".format(epoch + 1, EPOCHS, i_fold+1, NSPLITS))
+        print("[Info] Starting Epoch {}/{} --> Fold {}/{}, ID: {}".format(epoch + 1, EPOCHS, i_fold+1, NSPLITS, ID))
         for images, labels in train_ds:
             train_step(images, labels)
         for val_images, val_labels in val_ds:
@@ -205,6 +203,7 @@ while(epoch<EPOCHS):
             p = test_step(test_images, test_labels)
             fold_predictions = tf.concat([fold_predictions, p], -1)
             fold_labels = tf.concat([fold_labels, test_labels], -1)
+
         # confusion_matrix_summary(test_labels, p, [0,1,2,3,4], optimizer.iterations)
         con_mat = tf.math.confusion_matrix(labels=fold_labels, predictions=fold_predictions).numpy()
         con_mat_norm = np.around(con_mat.astype('float') / con_mat.sum(axis=1)[:, np.newaxis], decimals=2)
@@ -231,7 +230,7 @@ while(epoch<EPOCHS):
 
         # Log the confusion matrix as an image summary.
         with file_writer.as_default():
-            tf.summary.image("Confusion Matrix", image, step=(epoch*NSPLITS)+ i_fold)
+            tf.summary.image("Confusion Matrix", image, step=epoch) #(epoch*NSPLITS)+ i_fold)
 
         # Always update best accuracy
         if test_accuracy.result() > best_accuracy:

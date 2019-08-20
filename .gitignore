@@ -105,6 +105,9 @@ venv.bak/
 
 #DATASET
 data/*
+preprocessed/*
+tensorboard/*
 models/*
 out/*
 try_small.py
+events.*

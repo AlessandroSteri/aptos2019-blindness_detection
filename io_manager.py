@@ -11,24 +11,14 @@ import preprocessing as pre
 def load_dataset_from_images(dataset_dir):
     # Path variables
     train_dir   = os.path.join(dataset_dir, 'train_images')
-    test_dir    = os.path.join(dataset_dir, 'test_images')
     IMG_SIZE = 224      #224x244 is the size of ImageNet
-    TRAIN_VAL_SPLIT = 0.30
 
     # Function to open image and resize it
     def load_image_resized(image_path, desired_size=IMG_SIZE):
         return pre.preprocess(image_path)
     # Load csv file sa pandas dataframe
     train_df = pd.read_csv(os.path.join(dataset_dir, 'train.csv'))
-    test_df  = pd.read_csv(os.path.join(dataset_dir, 'test.csv'))
     x_train = np.empty((train_df.shape[0], IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)
-    x_test = np.empty((test_df.shape[0], IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)
-
-    # Debug
-    print("Training set Shape " + str(train_df.shape))
-    print("Test set shape " + str(test_df.shape))
-    # Training set label distribution
-    plt.show(train_df['diagnosis'].hist())
 
     # Load training data
     for i, image_id in enumerate(tqdm(train_df['id_code'])):
@@ -40,21 +30,21 @@ def load_dataset_from_images(dataset_dir):
         plt.show()
     y_train = train_df['diagnosis'].values  #Labels
 
-    # Load test data
-    for i, image_id in enumerate(tqdm(test_df['id_code'])):
-        x_test[i, :, :, :] = load_image_resized(
-            os.path.join(test_dir, "{}.png".format(image_id))
-        )
-    # THERE ARE NO LABELS FOR TEST DATA
+    # if load_test:
+        # test_dir    = os.path.join(dataset_dir, 'test_images')
+        # test_df  = pd.read_csv(os.path.join(dataset_dir, 'test.csv'))
+        # x_test = np.empty((test_df.shape[0], IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)
 
-    #Debug
-    print("Size Train Set: " + str(x_train.shape))
-    print("Size Test Set: " + str(x_test.shape))
+        # Load test data
+        # for i, image_id in enumerate(tqdm(test_df['id_code'])):
+        #     x_test[i, :, :, :] = load_image_resized(
+        #         os.path.join(test_dir, "{}.png".format(image_id))
+        #     )
+        # THERE ARE NO LABELS FOR TEST DATA
 
     # Split dataset in Train and Validation set
-    x_train, x_val, y_train, y_val= train_test_split(x_train, y_train, test_size=TRAIN_VAL_SPLIT)
-    x_train, x_val, x_test = x_train / 255.0, x_val/ 255.0, x_test / 255.0
-    return x_train, x_val, x_test, y_train, y_val
+    x_train = x_train / 255.0
+    return x_train, y_train
 
 def get_ImageGenerator():
     gen = ImageDataGenerator(width_shift_range=0.05,    #percentage [-0.2,+0.2] of image size
@@ -116,18 +106,23 @@ def data_augmentation_by_label(X, y, labels=[0], instances=[100]):
 
 def load_dataset_from_npz(dataset_dir):
     x_train_filepath = os.path.join(dataset_dir, 'x_train.npz')
-    x_test_filepath  = os.path.join(dataset_dir, 'x_test.npz')
-    x_val_filepath   = os.path.join(dataset_dir, 'x_val.npz')
     y_train_filepath = os.path.join(dataset_dir, 'y_train.npz')
-    y_val_filepath   = os.path.join(dataset_dir, 'y_val.npz')
+    # x_test_filepath  = os.path.join(dataset_dir, 'x_test.npz')
+    # x_val_filepath   = os.path.join(dataset_dir, 'x_val.npz')
+    # y_val_filepath   = os.path.join(dataset_dir, 'y_val.npz')
     x_train = np.load(x_train_filepath)['arr_0']
-    x_test = np.load(x_test_filepath)['arr_0']
-    x_val = np.load(x_val_filepath)['arr_0']
     y_train = np.load(y_train_filepath)['arr_0']
-    y_val = np.load(y_val_filepath)['arr_0']
-    return x_train, x_val, x_test, y_train, y_val
+    # x_test = np.load(x_test_filepath)['arr_0']
+    # x_val = np.load(x_val_filepath)['arr_0']
+    # y_val = np.load(y_val_filepath)['arr_0']
+    # return x_train, x_val, x_test, y_train, y_val
+    return x_train, y_train
 
-def save_dataset_npz(x_train, x_val, x_test, y_train, y_val, dataset_dir):
+def save_dataset_npz(x_train, y_train, dataset_dir):
+    np.savez_compressed(os.path.join(dataset_dir, 'x_train.npz'), x_train)
+    np.savez_compressed(os.path.join(dataset_dir, 'y_train.npz'), y_train)
+
+def save_dataset_npz_all(x_train, x_val, x_test, y_train, y_val, dataset_dir):
     np.savez_compressed(os.path.join(dataset_dir, 'x_train.npz'), x_train)
     np.savez_compressed(os.path.join(dataset_dir, 'x_val.npz'), x_val)
     np.savez_compressed(os.path.join(dataset_dir, 'x_test.npz'), x_test)

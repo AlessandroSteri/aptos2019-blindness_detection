@@ -46,18 +46,23 @@ BATCH_SIZE = 32
 EPOCHS  = 30        # Number of epochs for training
 NSPLITS = 10        # KFold cross validations
 THRESHOLD = 75.0    # Save only models with accuracy above the threshold
+TRAIN_TEST_SPLIT = 30.0    # Percentage split of train/test set
 
 print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
 
 # LOADING DATASET
 print("[Info] Loading Dataset...")
 # IF FIRST TIME, RUN THESE LINES:
-# x_train, x_val, x_test, y_train, y_val = io_manager.load_dataset_from_images(dataset_dir)
-# io_manager.save_dataset_npz(x_train, x_val, x_test, y_train, y_val, 'preprocessed')
+x_train, y_train = io_manager.load_dataset_from_images(dataset_dir)
+io_manager.save_dataset_npz(x_train, y_train, 'preprocessed')
 
 # IF ALREADY SAVED NPZ, RUN THIS LINE
-x_train, x_val, x_test, y_train, y_val = io_manager.load_dataset_from_npz('preprocessed')
+# x_train, y_train = io_manager.load_dataset_from_npz('preprocessed')
 print("[Info] Dataset loaded.")
+
+# SPLIT TRAIN/TEST DATA
+x_train, x_test, y_train, y_test = train_test_split(x_train, y_train, test_size=TRAIN_TEST_SPLIT)
+print("[Info] Data splitted in train ({}) and test ({}).".format(len(y_train), len(y_test)))
 
 #DATA AUGMENTATION
 classes = [0,1,2,3,4]

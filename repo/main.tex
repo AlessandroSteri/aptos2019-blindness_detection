@@ -1,0 +1,119 @@
+\documentclass[12pt]{article}
+
+\usepackage{sectsty}
+% \usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{abstract}
+\usepackage[final]{graphicx}
+\usepackage{subcaption}
+% \usepackage{subfig}
+\usepackage{float}
+
+
+\renewcommand{\contentsname}{\centering Contents}   
+\renewcommand{\abstractnamefont}{\normalfont\normalsize\bfseries\Large}
+\renewcommand{\abstracttextfont}{\large}
+
+% Margins
+\topmargin=-0.45in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+% \title{Monte Carlo Tree Search driven Falsification}
+\title{APTOS 2019 Blindness Detection\\ \large Detect Diabetic Retinopathy to Stop Blindness Before it's too Late}
+\author{Lugi Berducci \and Alessandro Steri}
+\date{\today}
+
+\begin{document}
+\maketitle	
+
+
+%--Paper--
+\begin{abstract}
+Hei I'm a cool abstract.
+\end{abstract}
+
+\tableofcontents
+
+\pagebreak
+
+\section{Motivation}
+Why kaggle: real problem.
+\section{Background}
+Few lines about the problem and medical stuff.
+
+\section{Preprocessing}
+\subsection{data augmentation}
+\subsection{crop}
+\subsection{K-fold}
+\subsection{VGG features}
+
+% \begin{figure}[H]
+%   \includegraphics[width=\linewidth]{img/mcts2.png}
+%   \caption{Graphical overview of MCTS phases and theirs behaviors.}
+%   \label{fig:mcts}
+% \end{figure}
+
+
+
+\section{Models}
+\subsection{baseline}
+\subsection{MLP}
+\subsection{Multihead, Attention, ResNet..}
+
+
+
+\section{Evaluation and Experimental Result}
+\subsection{Evaluation}
+How did we evaluate, 70/30 85/15. multiple tests to reduce variance ecc..
+\subsection{Hyperparameters}
+\subsection{Experiments}
+\subsection{Results}
+
+% TEST ON SPEC 1
+\begin{table}[ht]
+\centering
+\title{Experiments on specification \texttt{S1}}
+\begin{tabular}{|l|l|c|c|c|c|c|c|c|}
+\hline
+\multicolumn{1}{|c|}{\multirow{2}{*}{Algo}} & \multirow{2}{*}{C} & Avg Trace               & \multirow{2}{*}{Success Rate} & \multicolumn{3}{c|}{Robustness} & \multicolumn{2}{c|}{Time (sec)} \\ \cline{5-9} 
+\multicolumn{1}{|c|}{}                      &                    & Falsification           &                               & min       & avg      & std dev  & tot        & trace        \\ \hline
+URS                                         & - - -              & \textbf{40.0}           & \textbf{2/10}                 & \textbf{-4.07960}    & \textbf{4.91882}
+                                            & \textbf{5.514537}  & \textbf{178.014}        & \textbf{2.010}    \\ \hline
+MCTS+RS                                     & 0.500              & - - -                   & 0/10                          &  5.30248  & 8.34921  & \textbf{2.400517} &  \textbf{559.916} &  \textbf{5.599}    \\
+MCTS+HC                                     & 0.500              &  94.0                   & \textbf{1/10}                 & \textbf{-1.93401}  & \textbf{5.07959} & 4.386757 & 1034.225 & 10.405    \\
+MCTS+SA                                     & 0.500              &  \textbf{24.0}          & \textbf{1/10}                 & -0.68394           & 7.71311          & 4.152730 &  891.788 &  9.781    \\ \hline
+
+MCTS+RS                                     & 0.250              &  \textbf{62.0}          & 4/10                          & -4.52952  &  2.80386 & 4.995340 &  \textbf{355.163} &  \textbf{4.198}    \\
+MCTS+HC                                     & 0.250              &  74.4                   & 5/10                          & -3.63763  &  2.02058 & 4.289398 &  676.262 &  7.774    \\
+MCTS+SA                                     & 0.250              &  74.6                   & \textbf{7/10}                          & \textbf{-10.29078} & \textbf{-2.38069} & \textbf{3.744391} &  597.866 &  7.297    \\ \hline
+
+MCTS+RS                                     & 0.125              &  \textbf{46.5}          & \textbf{8/10}                          & -6.27352  & \textbf{-1.28520} & \textbf{3.320830} &  \textbf{170.078} &  \textbf{2.996}    \\
+MCTS+HC                                     & 0.125              &  68.1                   & \textbf{8/10}                         & -4.61933  & -0.07330 & 4.719893 &  380.664 &  5.127    \\
+MCTS+SA                                     & 0.125              &  48.5                   & \textbf{8/10}                         & \textbf{-6.43350}  & -0.69363 & 5.875865 &  304.758 &  5.225    \\ \hline
+
+MCTS+RS                                     & 0.000              &  65.5                   & 2/10                          & \textbf{-4.20689}  & 6.83323  & 7.070816 & \textbf{325.054} &  \textbf{3.510}    \\
+MCTS+HC                                     & 0.000              &  \textbf{41.0}          & \textbf{4/10}                          & -2.64884  & \textbf{1.95654}  & \textbf{3.712926} &  430.037 &  5.589    \\
+MCTS+SA                                     & 0.000              &  78.0                   & 2/10                          & -1.51834  & 4.81908  & 6.613282 &  558.383 &  5.834    \\ \hline
+\end{tabular}
+\caption{Comparison between MCTS and URS, given a budget of 100 simulations and varying the parameter C in order to balance exploration and exploitation in the search. The input signals have been split into 2 and 3 region.}~\label{table:res:s1}
+\end{table}
+
+
+\pagebreak
+
+\subsubsection{Analysis of the Results}
+comments on the results. comparing models and vs kaggle leaderboard.
+
+
+\section{Conclusion and Future Work}
+
+
+
+\bibliographystyle{plain}
+\bibliography{biblio}
+
+\end{document}

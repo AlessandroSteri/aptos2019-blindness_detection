@@ -15,7 +15,7 @@ def load_dataset_from_images(dataset_dir):
 
     # Function to open image and resize it
     def load_image_resized(image_path, desired_size=IMG_SIZE):
-        return pre.preprocess(image_path)
+        return pre.preprocess_2(image_path)
     # Load csv file sa pandas dataframe
     train_df = pd.read_csv(os.path.join(dataset_dir, 'train.csv'))
     x_train = np.empty((train_df.shape[0], IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)

@@ -10,23 +10,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 from tqdm import tqdm
+from tensorflow.keras.utils import plot_model
 
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Dropout
-from tensorflow.keras import Model
-from tensorflow.keras.applications.vgg16 import VGG16
+# from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Dropout, batch_normalization
+# from tensorflow.keras import Model
+# from tensorflow.keras.applications.vgg16 import VGG16
 from sklearn.model_selection import LeaveOneOut, KFold, train_test_split
 import io_manager
-from MyModel import MyModel
+from MyModel import MyModel, MyModelMultihead, MultiheadAttentive, MultiheadAttentiveBiLSTM, MultiheadResNet, MultiheadAttentiveNoVGG, MultiheadAttentiveBiLSTMNoVGG
 from Baseline import Baseline, MultiLayerPerceptron
 
 from utils import id_gen, mkdir
 
 cmdLineParser = argparse.ArgumentParser()
 cmdLineParser.add_argument("log_info", type=str, help="Info to log.")
+cmdLineParser.add_argument("--preproc", dest='preproc', type=int, choices=[1, 2], help="Preprocessing 1 or 2.", default=2)
+cmdLineParser.add_argument('--traintest', dest='traintest', type=float, help="Split in 1 digit float.", default=0.30)
+cmdLineParser.add_argument('--epochs', dest='epochs', type=int, help="Number of epochs.", default=30)
+cmdLineParser.add_argument('--ksplits', dest='ksplits', type=int, help="Number of splits for k fold val.", default=10)
+cmdLineParser.add_argument('--dataaug', dest='dataaug', type=int, help="Factor of data augmentation.", default = 1)
 cmdLineArgs = cmdLineParser.parse_args()
+# PARAMETERS
 log_info = cmdLineArgs.log_info
-
+PREPROCESSING = cmdLineArgs.preproc
+TRAIN_TEST_SPLIT = cmdLineArgs.traintest
+EPOCHS = cmdLineArgs.epochs
+NSPLITS = cmdLineArgs.ksplits
+DATAAUG_FACTOR = cmdLineArgs.dataaug
+dataset_dir = 'data'
+output_dir = 'out'
+models_dir = 'models'
+tensorboard_dir = 'tensorboard'
+mkdir(tensorboard_dir)
+BATCH_SIZE = 32
+THRESHOLD = 75.0    # Save only models with accuracy above the threshold
 
 # Uncomment to force CPU run
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
@@ -36,22 +54,9 @@ log_info = cmdLineArgs.log_info
 from tensorflow.random import set_seed
 set_seed(3)
 
-# PARAMETERS
-# log_info = 'novgg'
-dataset_dir = 'data'
-output_dir = 'out'
-models_dir = 'models'
-tensorboard_dir = 'tensorboard'
-mkdir(tensorboard_dir)
-BATCH_SIZE = 32
-EPOCHS  = 30        # Number of epochs for training
-NSPLITS = 10        # KFold cross validations
-THRESHOLD = 75.0    # Save only models with accuracy above the threshold
-TRAIN_TEST_SPLIT = 0.3    # Percentage split of train/test set
-
-ID = id_gen()
-
-tb_base_dir = os.path.join(tensorboard_dir, ID + '_' + log_info)
+ID = id_gen() #Why not datetime?
+tf_log_name = "{}_{}".format(ID, log_info)
+tb_base_dir = os.path.join(tensorboard_dir, tf_log_name)
 mkdir(tb_base_dir)
 
 print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
@@ -60,10 +65,14 @@ print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
 print("[Info] Loading Dataset...")
 # IF FIRST TIME, RUN THESE LINES:
 # x_train, y_train = io_manager.load_dataset_from_images(dataset_dir)
-# io_manager.save_dataset_npz(x_train, y_train, 'preprocessed')
+# io_manager.save_dataset_npz(x_train, y_train, 'preprocessed_1')
 
 # IF ALREADY SAVED NPZ, RUN THIS LINE
-x_train, y_train = io_manager.load_dataset_from_npz('preprocessed')
+if PREPROCESSING==1:
+    x_train, y_train = io_manager.load_dataset_from_npz('preprocessed_1')
+else:
+    x_train, y_train = io_manager.load_dataset_from_npz('preprocessed_2')
+
 print("[Info] Dataset loaded.")
 
 # SPLIT TRAIN/TEST DATA
@@ -75,7 +84,7 @@ classes = [0,1,2,3,4]
 print("[Info] Training set data augmentation. Tot: {} images".format(len(y_train)))
 for c in classes:
     print("    Class {}: {}".format(c, len(y_train[y_train==c])))
-num_instances = [149, 146, 139, 159, 94]
+num_instances = [DATAAUG_FACTOR*i for i in [149, 146, 139, 159, 94]]
 #in this way tot is [1400, 400, 850, 300, 300]
 augX, augY = io_manager.data_augmentation(  x_train, y_train,
                                             labels=classes,
@@ -88,16 +97,26 @@ for c in classes:
 
 # BUILDING MODEL
 print("[Info] Creating the model")
-#model = VGG16()
-#print(model.summary())
-model = MyModel()
 # model = Baseline()
 # model = MultiLayerPerceptron()
+# model = MyModel()
+# model = MyModelMultihead()
+# model = MultiheadAttentive()
+model = MultiheadAttentiveBiLSTM()
+# broken
+# model = MultiheadResNet()
+# model = MultiheadAttentiveNoVGG()
+# model = MultiheadAttentiveBiLSTMNoVGG()
+
+
+
+plot_model_file = os.path.join(tb_base_dir, 'model.png')
+plot_model(model, to_file=plot_model_file, show_shapes=True, show_layer_names=True)
 
 # TensorBoard summary
 summary_writer = tf.summary.create_file_writer(tb_base_dir)
-# cm_dir = os.path.join(tb_base_dir, 'cm')
-file_writer = tf.summary.create_file_writer(tb_base_dir)
+cm_dir = os.path.join(tb_base_dir, 'cm')
+file_writer = tf.summary.create_file_writer(cm_dir)
 
 
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy() #model_cohen_kappa
@@ -169,8 +188,6 @@ best_accuracy = 0.0
 test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(BATCH_SIZE)
 k_fold = KFold(n_splits=NSPLITS, shuffle=True)
 
-# for epoch in range(EPOCHS):
-# TODO Find a way to make Kfold indipendent by num epochs
 log_dir="logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 # cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
@@ -194,6 +211,7 @@ while(epoch<EPOCHS):
             train_step(images, labels)
         for val_images, val_labels in val_ds:
             val_step(val_images, val_labels)
+        # model.summary()
 
         fold_predictions = []
         fold_labels = []

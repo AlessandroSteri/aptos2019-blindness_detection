@@ -105,7 +105,7 @@ venv.bak/
 
 #DATASET
 data/*
-preprocessed/*
+preprocessed_*/*
 tensorboard/*
 models/*
 out/*

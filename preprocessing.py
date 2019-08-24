@@ -66,7 +66,13 @@ def preprocess_test():
         print(img.shape)
     # plt.show()
 
-def preprocess(image_path):
+def preprocess_1(image_path):
+    # Only color filtering
+    img = load_ben_color(image_path)
+    return img
+
+def preprocess_2(image_path):
+    # Color filtering and circular cropping
     img = load_ben_color(image_path)
     img = circle_crop_v2(img)
     return img

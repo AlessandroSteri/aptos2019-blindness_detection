@@ -18,13 +18,14 @@ import tensorflow as tf
 # from tensorflow.keras.applications.vgg16 import VGG16
 from sklearn.model_selection import LeaveOneOut, KFold, train_test_split
 import io_manager
-from MyModel import MyModel, MyModelMultihead, MultiheadAttentive, MultiheadAttentiveBiLSTM, MultiheadResNet, MultiheadAttentiveNoVGG, MultiheadAttentiveBiLSTMNoVGG
+from MyModel import MyModel, MyModelMultihead, MultiheadAttentive, MultiheadResNet, MultiheadAttentiveNoVGG, SimpleResNet
 from Baseline import Baseline, MultiLayerPerceptron
 
 from utils import id_gen, mkdir
 
 cmdLineParser = argparse.ArgumentParser()
 cmdLineParser.add_argument("log_info", type=str, help="Info to log.")
+cmdLineParser.add_argument("--model", dest='model', choices=["MLP", "ResNet", "Attention", "Multihead"], help="Model of NN.", default="Multihead")
 cmdLineParser.add_argument("--preproc", dest='preproc', type=int, choices=[1, 2], help="Preprocessing 1 or 2.", default=2)
 cmdLineParser.add_argument('--traintest', dest='traintest', type=float, help="Split in 1 digit float.", default=0.30)
 cmdLineParser.add_argument('--epochs', dest='epochs', type=int, help="Number of epochs.", default=30)
@@ -33,6 +34,7 @@ cmdLineParser.add_argument('--dataaug', dest='dataaug', type=int, help="Factor o
 cmdLineArgs = cmdLineParser.parse_args()
 # PARAMETERS
 log_info = cmdLineArgs.log_info
+MODEL = cmdLineArgs.model
 PREPROCESSING = cmdLineArgs.preproc
 TRAIN_TEST_SPLIT = cmdLineArgs.traintest
 EPOCHS = cmdLineArgs.epochs
@@ -62,15 +64,17 @@ mkdir(tb_base_dir)
 print("[Info] Tensorflow is using GPU: {}".format(tf.test.is_gpu_available()))
 
 # LOADING DATASET
-print("[Info] Loading Dataset...")
+# print("[Info] Loading Dataset...")
 # IF FIRST TIME, RUN THESE LINES:
 # x_train, y_train = io_manager.load_dataset_from_images(dataset_dir)
 # io_manager.save_dataset_npz(x_train, y_train, 'preprocessed_1')
 
 # IF ALREADY SAVED NPZ, RUN THIS LINE
 if PREPROCESSING==1:
+    print("[Info] Loading Dataset - Simple Color Preprocessing")
     x_train, y_train = io_manager.load_dataset_from_npz('preprocessed_1')
 else:
+    print("[Info] Loading Dataset - Color and Crop Preprocessing")
     x_train, y_train = io_manager.load_dataset_from_npz('preprocessed_2')
 
 print("[Info] Dataset loaded.")
@@ -81,34 +85,45 @@ print("[Info] Data splitted in train ({}) and test ({}).".format(len(y_train), l
 
 #DATA AUGMENTATION
 classes = [0,1,2,3,4]
-print("[Info] Training set data augmentation. Tot: {} images".format(len(y_train)))
+print("[Info] Training set data augmentation. Init sample: {} images".format(len(y_train)))
 for c in classes:
     print("    Class {}: {}".format(c, len(y_train[y_train==c])))
-num_instances = [DATAAUG_FACTOR*i for i in [149, 146, 139, 159, 94]]
+
+num_instances = [1400, 400, 800, 300, 300]
+num_instances = [num_instances[c] - len(y_train[y_train==c]) for c in classes]
+num_instances = [DATAAUG_FACTOR*i for i in num_instances]
 #in this way tot is [1400, 400, 850, 300, 300]
 augX, augY = io_manager.data_augmentation(  x_train, y_train,
                                             labels=classes,
                                             instances=num_instances)
 x_train = np.concatenate((x_train, augX))
 y_train = np.concatenate((y_train, augY))
-print("[Info] Training set data augmentation. Tot: {} images".format(len(y_train)))
+print("[Info] Training set data augmentation. Augmented sample: {} images".format(len(y_train)))
 for c in classes:
     print("    Class {}: {}".format(c, len(y_train[y_train==c])))
 
 # BUILDING MODEL
-print("[Info] Creating the model")
-# model = Baseline()
-# model = MultiLayerPerceptron()
+if MODEL=="MLP":
+    model = MultiLayerPerceptron()
+elif MODEL=="ResNet":
+    model = SimpleResNet()
+elif MODEL=="Attention":
+    model = MultiheadAttentiveNoVGG()
+elif MODEL=="Multihead":
+    model = MyModelMultihead()
+else:
+    print("[ERROR] model not found")
+    exit(1)
+print("[Info] Created model: {}".format(MODEL))
+
 # model = MyModel()
 # model = MyModelMultihead()
 # model = MultiheadAttentive()
-model = MultiheadAttentiveBiLSTM()
+# model = MultiheadAttentiveBiLSTM()
+
 # broken
 # model = MultiheadResNet()
-# model = MultiheadAttentiveNoVGG()
 # model = MultiheadAttentiveBiLSTMNoVGG()
-
-
 
 plot_model_file = os.path.join(tb_base_dir, 'model.png')
 plot_model(model, to_file=plot_model_file, show_shapes=True, show_layer_names=True)
@@ -193,28 +208,34 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram
 # cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
 epoch = 0
+print("[Info] Starting for {} epochs".format(EPOCHS))
 while(epoch<EPOCHS):
     for i_fold, (train_indices, val_indices) in enumerate(k_fold.split(x_train)):
         # Create fold split in train e validation sets
         if(epoch>=EPOCHS):
             break
-        k_fold_x_train = x_train[train_indices]
-        k_fold_y_train = y_train[train_indices]
-        k_fold_x_val = x_train[val_indices]
-        k_fold_y_val = y_train[val_indices]
-        train_ds = tf.data.Dataset.from_tensor_slices((k_fold_x_train, k_fold_y_train)).shuffle(100000).batch(BATCH_SIZE)
-        val_ds = tf.data.Dataset.from_tensor_slices((k_fold_x_val, k_fold_y_val)).batch(BATCH_SIZE)
+        # k_fold_x_train = x_train[train_indices]
+        # k_fold_y_train = y_train[train_indices]
+        # k_fold_x_val = x_train[val_indices]
+        # k_fold_y_val = y_train[val_indices]
+        # train_ds = tf.data.Dataset.from_tensor_slices((k_fold_x_train, k_fold_y_train)).shuffle(100000).batch(BATCH_SIZE)
+        # val_ds = tf.data.Dataset.from_tensor_slices((k_fold_x_val, k_fold_y_val)).batch(BATCH_SIZE)
+        train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(100000).batch(BATCH_SIZE)
+        val_ds = test_ds
+        # DISABLED K FOLD CROSS VAL
 
         # Train, Validation and Test steps
         print("[Info] Starting Epoch {}/{} --> Fold {}/{}, ID: {}".format(epoch + 1, EPOCHS, i_fold+1, NSPLITS, ID))
         for images, labels in train_ds:
             train_step(images, labels)
+        print("[Info] Validation step")
         for val_images, val_labels in val_ds:
             val_step(val_images, val_labels)
         # model.summary()
 
         fold_predictions = []
         fold_labels = []
+        print("[Info] Test step")
         for test_images, test_labels in test_ds:
             # ipdb.set_trace()
             # p =
@@ -282,6 +303,7 @@ while(epoch<EPOCHS):
                             test_accuracy.result()*100,
                             best_accuracy*100))
 
+        # ipdb.set_trace()
         # Reset the metrics for the next epoch
         train_loss.reset_states()
         train_accuracy.reset_states()

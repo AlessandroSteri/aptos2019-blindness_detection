@@ -433,21 +433,22 @@ class MultiheadAttentiveNoVGG(Model):
     self.dropout_max = Dropout(0.5)
     self.conv_avg = Conv2D(64, 3, activation='relu')
     self.dropout_avg = Dropout(0.5)
-    self.pool_max = MaxPooling2D(pool_size=(2, 2), strides=None, padding='valid', data_format=None)
-    self.pool_avg = MaxPooling2D(pool_size=(2, 2), strides=None, padding='valid', data_format=None)
+    self.pool_max = MaxPooling2D(pool_size=(4, 4), strides=None, padding='valid', data_format=None)
+    self.pool_avg = MaxPooling2D(pool_size=(4, 4), strides=None, padding='valid', data_format=None)
     self.conv_max_2 = Conv2D(32, 3, activation='relu')
     self.conv_avg_2 = Conv2D(32, 3, activation='relu')
-    self.d_max = Dense(128, activation='relu')
-    self.d_avg = Dense(128, activation='relu')
+    self.d_max = Dense(64, activation='relu')
+    self.d_avg = Dense(64, activation='relu')
     self.flatten = Flatten()
     self.bn = BatchNormalization()
-    self.d1_2 = Dense(56, activation='sigmoid')
-    self.d2 = Dense(6, activation='softmax')
+    self.d1_2 = Dense(64, activation='sigmoid')
+    self.d2 = Dense(5, activation='softmax')
     self.dropout_max = Dropout(0.5)
     self.dropout_avg = Dropout(0.5)
     self.dropout = Dropout(0.5)
 
   def call(self, x, is_training=True):
+    # print("INPUT " + str(x.shape))
     x = tf.cast(x, 'float32')
     x = self.bn(x)
     # MAX
@@ -456,7 +457,9 @@ class MultiheadAttentiveNoVGG(Model):
     x_max = self.pool_max(x_max)
     x_max = self.conv_max_2(x_max)
     x_max = self.d_max(x_max)
-    x_max = tf.reshape(x_max, [-1, 16, 128])
+    # print("shape " + str(x_max.shape))
+    # x_max = tf.reshape(x_max, [32, 11881, 128])
+    # print("MAX OK")
 
     # AVG
     x_avg = self.conv_avg(x)
@@ -464,17 +467,23 @@ class MultiheadAttentiveNoVGG(Model):
     x_avg = self.pool_avg(x_avg)
     x_avg = self.conv_avg_2(x_avg)
     x_avg = self.d_avg(x_avg)
-    x_avg = tf.reshape(x_avg, [-1, 16, 128])
+    # print("shape " + str(x_avg.shape))
+    # x_avg = tf.reshape(x_avg, [32, 11881, 128])
+    # print("AVG OK")
 
     # COMBINE
+    # print("MAX " + str(x_max.shape))
+    # print("AVG " + str(x_avg.shape))
     x = self.attention([x_max, x_avg])
     x = tf.concat([x_max, x_avg, x], -1)
     x = self.dropout(x, training=is_training)
     x = self.flatten(x)
     x = self.d1_2(x)
     # x = self.d1_4(x)
-    return self.d2(x)
-
+    x = self.d2(x)
+    # print("COMBINE OK")
+    # print("RETURN " + str(x.shape))
+    return x
 
 # class MultiheadAttentiveBiLSTMVggResNet(Model):
 #   def __init__(self):

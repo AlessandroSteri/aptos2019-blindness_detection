@@ -18,7 +18,7 @@ import tensorflow as tf
 # from tensorflow.keras.applications.vgg16 import VGG16
 from sklearn.model_selection import LeaveOneOut, KFold, train_test_split
 import io_manager
-from MyModel import MyModel, MyModelMultihead, MultiheadAttentive, MultiheadResNet, MultiheadAttentiveNoVGG, SimpleResNet
+from MyModel import MyModel, MyModelMultihead, MultiheadAttentive, MultiheadResNet, MultiheadAttentiveNoVGG, MultiheadAttentiveBiLSTMNoVGG, SimpleResNet
 from Baseline import Baseline, MultiLayerPerceptron
 
 from utils import id_gen, mkdir
@@ -45,7 +45,7 @@ output_dir = 'out'
 models_dir = 'models'
 tensorboard_dir = 'tensorboard'
 mkdir(tensorboard_dir)
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 THRESHOLD = 75.0    # Save only models with accuracy above the threshold
 
 # Uncomment to force CPU run
@@ -91,6 +91,7 @@ for c in classes:
 
 num_instances = [1400, 400, 800, 300, 300]
 num_instances = [num_instances[c] - len(y_train[y_train==c]) for c in classes]
+num_instances = [val if val>0 else 0 for val in num_instances]
 num_instances = [DATAAUG_FACTOR*i for i in num_instances]
 #in this way tot is [1400, 400, 850, 300, 300]
 augX, augY = io_manager.data_augmentation(  x_train, y_train,
@@ -103,6 +104,7 @@ for c in classes:
     print("    Class {}: {}".format(c, len(y_train[y_train==c])))
 
 # BUILDING MODEL
+tf.keras.backend.clear_session()
 if MODEL=="MLP":
     model = MultiLayerPerceptron()
 elif MODEL=="ResNet":
